@@ -128,7 +128,7 @@ public class MatcherPlugin {
       CompletableFuture<List<RegisteredServer>> future = new CompletableFuture<>();
       discoveredServers.computeIfAbsent(version, this::startDiscovery).thenAccept(result -> {
           result.entrySet().removeIf((entry -> {
-            return entry.getValue().getVersion().getProtocol() != version.getProtocol();
+            return (entry.getValue() == null) || (entry.getValue().getVersion().getProtocol() != version.getProtocol());
           }));
           future.complete(result.keySet().stream().toList());
       });
