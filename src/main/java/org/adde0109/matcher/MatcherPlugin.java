@@ -73,7 +73,9 @@ public class MatcherPlugin {
   public void onKickedFromServerEvent(KickedFromServerEvent event, Continuation continuation) {
     if (event.getServerKickReason().isPresent() &&
             event.getServerKickReason().get() instanceof TranslatableComponent disconnectComponent) {
-      
+      if (disconnectComponent.key().equals("multiplayer.disconnect.incompatible")) {
+        scout.clearCache(event.getPlayer().getProtocolVersion());
+      }
     }
     scout.getServerByVersion(event.getPlayer().getProtocolVersion()).thenAccept((r) -> {
       int kickedServerIndex = r.indexOf(event.getServer());
@@ -126,13 +128,15 @@ public class MatcherPlugin {
       CompletableFuture<List<RegisteredServer>> future = new CompletableFuture<>();
       discoveredServers.computeIfAbsent(version, this::startDiscovery).thenAccept(result -> {
           result.entrySet().removeIf((entry -> {
-            return entry.getValue().getVersion().getProtocol() == version.getProtocol();
+            return entry.getValue().getVersion().getProtocol() != version.getProtocol();
           }));
           future.complete(result.keySet().stream().toList());
       });
       return future;
     }
 
-
+    public void clearCache(ProtocolVersion version) {
+      discoveredServers.remove(version);
+    }
   }
 }
