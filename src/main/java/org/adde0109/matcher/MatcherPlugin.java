@@ -10,6 +10,7 @@ import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.network.ProtocolVersion;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
+import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.PingOptions;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
@@ -26,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@Plugin(id = "matcher", name = "Matcher", version = "0.0.0", authors = {"adde0109"})
+@Plugin(id = "matcher", name = "Matcher", version = "0.1.0", authors = {"adde0109"})
 public class MatcherPlugin {
 
   public ProxyServer server;
@@ -52,7 +53,7 @@ public class MatcherPlugin {
       Path configPath = dataDirectory.resolve("Matcher.toml");
       config = MatcherConfig.read(configPath);
       */
-      this.scout = new ServerScout(server.getConfiguration().getAttemptConnectionOrder());
+      //this.scout = new ServerScout(server.getConfiguration().getAttemptConnectionOrder());
 
     } catch (Exception e) {
       logger.error("An error prevented Matcher to load correctly: "+ e.toString());
@@ -61,33 +62,40 @@ public class MatcherPlugin {
 
 
 
-  @Subscribe
+  @Subscribe(order = PostOrder.FIRST)
   public void onPlayerChooseInitialServerEvent(PlayerChooseInitialServerEvent event, Continuation continuation) {
-    scout.getServerByVersion(event.getPlayer().getProtocolVersion()).thenAccept((r) -> {
-      event.setInitialServer(r.get(0));
-      continuation.resume();
-    });
-  }
-
-  @Subscribe
-  public void onKickedFromServerEvent(KickedFromServerEvent event, Continuation continuation) {
-    if (event.getServerKickReason().isPresent() &&
-            event.getServerKickReason().get() instanceof TranslatableComponent disconnectComponent) {
-      if (disconnectComponent.key().equals("multiplayer.disconnect.incompatible")) {
-        scout.clearCache(event.getPlayer().getProtocolVersion());
+    List<String> toTry = server.getConfiguration().getAttemptConnectionOrder();
+    for (int i = 0; i < toTry.size();i++) {
+      RegisteredServer registeredServer = server.getServer(toTry.get(i)).orElse(null);
+      if (registeredServer != null) {
+        Collection<Player> connectedPlayers = registeredServer.getPlayersConnected();
+        if (connectedPlayers.isEmpty()) {
+          event.setInitialServer(registeredServer);
+          break;
+        } else if (connectedPlayers.stream().filter((player ->
+                  !player.getProtocolVersion().equals(event.getPlayer().getProtocolVersion()))).toList().isEmpty()) {
+          event.setInitialServer(registeredServer);
+          break;
+        }
       }
     }
-    scout.getServerByVersion(event.getPlayer().getProtocolVersion()).thenAccept((r) -> {
-      int kickedServerIndex = r.indexOf(event.getServer());
-      if (kickedServerIndex > r.size()-1) {
-        event.setResult(KickedFromServerEvent.RedirectPlayer.create(
-                r.get(kickedServerIndex), event.getServerKickReason().orElse(Component.empty())));
-      } else {
-        event.setResult(KickedFromServerEvent.DisconnectPlayer.create(
-                event.getServerKickReason().orElse(Component.empty())));
+    continuation.resume();
+  }
+
+
+  @Subscribe(order = PostOrder.FIRST)
+  public void onKickedFromServerEvent(KickedFromServerEvent event, Continuation continuation) {
+    if (event.getResult() instanceof KickedFromServerEvent.RedirectPlayer) {
+      if (event.getServerKickReason().isPresent() &&
+              event.getServerKickReason().get() instanceof TranslatableComponent disconnectComponent) {
+        if (disconnectComponent.key().equals("multiplayer.disconnect.incompatible")
+                || disconnectComponent.key().startsWith("Outdated server!")) {
+          event.setResult(KickedFromServerEvent.RedirectPlayer.create(
+                  ((KickedFromServerEvent.RedirectPlayer) event.getResult()).getServer(), Component.empty()));
+        }
       }
-      continuation.resume();
-    });
+    }
+    continuation.resume();
   }
 
 
