@@ -57,7 +57,7 @@ public class PersistentFileManager {
       persistentPlayers1.players = entry.getValue().entrySet().stream().map((e) -> {
         PersistentPlayers.Player player = new PersistentPlayers.Player();
         player.uuid = e.getKey().toString();
-        player.preferredServer = e.getValue().toString();
+        player.preferredServer = e.getValue().getServerInfo().getName();
         return player;
       }).toList();
       return persistentPlayers1;
