@@ -2,6 +2,7 @@ package org.adde0109.matcher;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.stream.JsonWriter;
 import com.velocitypowered.api.event.Continuation;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
@@ -10,10 +11,12 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 
 import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 
 public class PersistentFileManager {
@@ -23,27 +26,31 @@ public class PersistentFileManager {
   private Map<ProtocolVersion, Map<UUID, RegisteredServer>> persistentPlayers = Collections.synchronizedMap(new HashMap<>());
 
   private boolean modified = false;
-
-  Gson persistantGson;
-  BufferedWriter writer;
+  private final Path path;
 
   public PersistentFileManager(MatcherPlugin plugin, Path path) throws Exception {
     this.plugin = plugin;
+    this.path = path;
 
-    loadPersistentFile(path);
-
-    writer = Files.newBufferedWriter(path);
+    if (Files.exists(path)) {
+      loadPersistentFile(path);
+    }
   }
 
-  @Subscribe
-  public void onProxyShutdown(ProxyShutdownEvent event, Continuation continuation) throws IOException {
-    writer.flush();
-  }
-
-  private synchronized void updatePersistentFile() {
+  synchronized void updatePersistentFile() throws IOException {
+    /*
     if (!modified) {
       return;
     }
+     */
+    GsonBuilder gsonBuilder = new GsonBuilder();
+    gsonBuilder.setPrettyPrinting();
+    Gson persistantGson = gsonBuilder.create();
+
+    BufferedWriter writer = Files.newBufferedWriter(path,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING);
+
     persistantGson.toJson(persistentPlayers.entrySet().stream().map((entry) -> {
       PersistentPlayers persistentPlayers1 = new PersistentPlayers();
       persistentPlayers1.clientProtocolVersion = entry.getKey().getProtocol();
@@ -54,7 +61,8 @@ public class PersistentFileManager {
         return player;
       }).toList();
       return persistentPlayers1;
-    }).toArray(), writer);
+    }).toArray(), PersistentPlayers[].class, writer);
+    writer.close();
     modified = false;
   }
 
