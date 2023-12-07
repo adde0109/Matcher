@@ -38,11 +38,9 @@ public class PersistentFileManager {
   }
 
   synchronized void updatePersistentFile() throws IOException {
-    /*
     if (!modified) {
       return;
     }
-     */
     GsonBuilder gsonBuilder = new GsonBuilder();
     gsonBuilder.setPrettyPrinting();
     Gson persistantGson = gsonBuilder.create();
